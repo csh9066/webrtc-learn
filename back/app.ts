@@ -33,11 +33,11 @@ server.listen(3005, () => {
 	console.log(`sever running http://localhost:3005`);
 });
 
-type Rooms = {
-	[room: string]: string[];
+type Payload = {
+	caller: string;
+	calle: string;
+	sdp: RTCSessionDescriptionInit;
 };
-
-const rooms: Rooms = {};
 
 io.use((socket: SocketIo.Socket, next) => {
 	session({
@@ -51,27 +51,34 @@ io.use((socket: SocketIo.Socket, next) => {
 	})(socket.request, socket.request.res, next);
 });
 
-io.on('connection', (socket: SocketIo.Socket) => {
+io.on('connection', (socket) => {
+	let roomID: string;
 	socket.on('join room', (roomID: string) => {
-		if (rooms[roomID]) {
-			rooms[roomID].push(socket.id);
-		} else {
-			rooms[roomID] = [socket.id];
-		}
-		console.log(rooms[roomID]);
+		roomID = roomID;
+		socket.join(roomID);
 
-		const otherUser = rooms[roomID].find((id) => id !== socket.id);
-		if (otherUser) {
-			socket.emit('other user', otherUser);
-			socket.to(otherUser).emit('user join', socket.id);
+		// 자신을 제외한 방안에 있는 유저들
+		const ohterUsers = Object.keys(socket.adapter.rooms[roomID].sockets).filter(
+			(id) => socket.id !== id
+		);
+
+		if (ohterUsers.length !== 0) {
+			socket.emit('ohter users', ohterUsers);
 		}
+
+		// socket.broadcast.to(roomID).emit('user joined', socket.id);
 	});
 
-	socket.on('offer', (payload) => {
-		io.to(payload.target).emit('offer', payload);
+	socket.on('offer', ({ calle, caller, sdp }: Payload) => {
+		io.to(calle).emit('offer', { calle, caller, sdp });
 	});
 
-	socket.on('answer', (payload) => {
-		io.to(payload.target).emit('answer', payload);
+	socket.on('answer', ({ caller, sdp }: Payload) => {
+		io.to(caller).emit('answer', sdp);
+	});
+
+	socket.on('new-ice-candidate', (incoming) => {
+		console.log('ice-candidate', incoming.caller, incoming.target);
+		io.to(incoming.target).emit('ice-candidate', incoming.candidate);
 	});
 });
