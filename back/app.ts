@@ -33,10 +33,16 @@ server.listen(3005, () => {
 	console.log(`sever running http://localhost:3005`);
 });
 
-type Payload = {
+type SdpPayload = {
 	caller: string;
-	calle: string;
+	callee: string;
 	sdp: RTCSessionDescriptionInit;
+};
+
+type IcePayload = {
+	target: string;
+	source: string;
+	candidate: RTCIceCandidate;
 };
 
 io.use((socket: SocketIo.Socket, next) => {
@@ -69,16 +75,20 @@ io.on('connection', (socket) => {
 		// socket.broadcast.to(roomID).emit('user joined', socket.id);
 	});
 
-	socket.on('offer', ({ calle, caller, sdp }: Payload) => {
-		io.to(calle).emit('offer', { calle, caller, sdp });
+	socket.on('offer', ({ callee, caller, sdp }: SdpPayload) => {
+		io.to(callee).emit('offer', { callee, caller, sdp });
 	});
 
-	socket.on('answer', ({ caller, sdp }: Payload) => {
-		io.to(caller).emit('answer', sdp);
+	socket.on('answer', ({ caller, sdp, callee }: SdpPayload) => {
+		io.to(caller).emit('answer', { caller, callee, sdp });
 	});
 
-	socket.on('new-ice-candidate', (incoming) => {
-		console.log('ice-candidate', incoming.caller, incoming.target);
-		io.to(incoming.target).emit('ice-candidate', incoming.candidate);
-	});
+	socket.on(
+		'new-ice-candidate',
+		({ target, candidate, source }: IcePayload) => {
+			console.log(target, source);
+
+			io.to(target).emit('new-ice-candidate', { target, candidate, source });
+		}
+	);
 });
